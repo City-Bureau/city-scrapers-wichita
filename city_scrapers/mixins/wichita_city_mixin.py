@@ -59,7 +59,7 @@ class WichitaCityMixin(CityScrapersSpider):
             all_day=False,
             time_notes="",
             location=self._parse_location(item),
-            links=item.url,
+            links=self.links,
             source=item.url,
         )
 
