@@ -2,7 +2,7 @@ from datetime import datetime
 from os.path import dirname, join
 
 import pytest  # noqa: F401
-from city_scrapers_core.constants import TENTATIVE
+from city_scrapers_core.constants import TENTATIVE, COMMITTEE
 from city_scrapers_core.utils import file_response
 from freezegun import freeze_time
 
@@ -42,7 +42,7 @@ def test_description():
 
 
 def test_classification():
-    assert parsed_item["classification"] == WicCityApcSpider.classification
+    assert parsed_item["classification"] == COMMITTEE
 
 
 def test_start():
@@ -83,10 +83,7 @@ def test_source():
 
 
 def test_links():
-    assert (
-        parsed_item["links"]
-        == "https://www.wichita.gov/Calendar.aspx?EID=1592&month=2&year=2024&day=13&calType=0"  # noqa: E501
-    )  # noqa: E501
+    assert parsed_item["links"] == WicCityApcSpider.links
 
 
 def test_all_day():
