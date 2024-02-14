@@ -190,7 +190,9 @@ class WichitaCityMixin(CityScrapersSpider):
         # Format the address
         regionAndPostal = f"{region} {postal_code}"
         address_components = [street, locality, regionAndPostal]
-        formatted_address = ", ".join(component for component in address_components if component)
+        formatted_address = ", ".join(
+            component for component in address_components if component
+        )
         return {
             "name": name,
             "address": formatted_address,
