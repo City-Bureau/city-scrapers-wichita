@@ -169,25 +169,29 @@ class WichitaCityMixin(CityScrapersSpider):
         )
         street = (
             item.css(".specificDetailItem span[itemprop='streetAddress']::text")
-            .get()
+            .get(default="")
             .strip()
         )
         locality = (
             item.css(".specificDetailItem span[itemprop='addressLocality']::text")
-            .get()
+            .get(default="")
             .strip()
         )
         postal_code = (
             item.css(".specificDetailItem span[itemprop='postalCode']::text")
-            .get()
+            .get(default="")
             .strip()
         )
         region = (
             item.css(".specificDetailItem span[itemprop='addressRegion']::text")
-            .get()
+            .get(default="")
             .strip()
         )
+        # Format the address
+        regionAndPostal = f"{region} {postal_code}"
+        address_components = [street, locality, regionAndPostal]
+        formatted_address = ", ".join(component for component in address_components if component)
         return {
             "name": name,
-            "address": f"{street}, {locality}, {region} {postal_code}",
+            "address": formatted_address,
         }
