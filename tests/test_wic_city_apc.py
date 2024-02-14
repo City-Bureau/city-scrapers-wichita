@@ -2,7 +2,7 @@ from datetime import datetime
 from os.path import dirname, join
 
 import pytest  # noqa: F401
-from city_scrapers_core.constants import TENTATIVE, COMMITTEE
+from city_scrapers_core.constants import COMMITTEE, TENTATIVE
 from city_scrapers_core.utils import file_response
 from freezegun import freeze_time
 
