@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 
 import scrapy
+from city_scrapers_core.constants import BOARD, COMMITTEE, NOT_CLASSIFIED
 from city_scrapers_core.items import Meeting
 from city_scrapers_core.spiders import CityScrapersSpider
 from dateutil.parser import parse
@@ -14,7 +15,7 @@ class WichitaCityMixin(CityScrapersSpider):
     Boards and committees are identified by a unique 'cid' value in the URL.
 
     To use this mixin, create a new spider class that inherits from both this mixin.
-    The new spider should have 'cid' and 'classification' attributes defined.
+    The new spider should have a 'cid' attribute defined.
     """
 
     name = "wic_apc"
@@ -48,10 +49,11 @@ class WichitaCityMixin(CityScrapersSpider):
             yield response.follow(event_query_string, self._parse_detail)
 
     def _parse_detail(self, item):
+        title = self._parse_title(item)
         meeting = Meeting(
-            title=self._parse_title(item),
+            title=title,
             description=self._parse_description(item),
-            classification=self._parse_classification(item),
+            classification=self._parse_classification(title),
             start=self._parse_start(item),
             end=self._parse_end(item),
             all_day=False,
@@ -106,9 +108,16 @@ class WichitaCityMixin(CityScrapersSpider):
         description = re.sub(r"[^\x20-\x7E]+", "", description)
         return description
 
-    def _parse_classification(self, item):
+    def _parse_classification(self, title):
         """Parse or generate classification from allowed options."""
-        return self.classification
+        if not title:
+            return NOT_CLASSIFIED
+        elif "board" in title.lower():
+            return BOARD
+        elif "committee" in title.lower():
+            return COMMITTEE
+        else:
+            return NOT_CLASSIFIED
 
     def _parse_start(self, response):
         """Extracts the start datetime as a naive datetime object.
