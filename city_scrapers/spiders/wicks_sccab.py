@@ -24,12 +24,13 @@ class WicksSccabSpider(CityScrapersSpider):
             "address": "905 N. Main, Wichita, Kansas",
         }
         for item in response.css("h4:nth-of-type(2) + *").css("li"):
+            date = re.search(r"\D+ \d+, \d+", item.css("::text").get()).group()
             meeting = Meeting(
                 title="Community Corrections Advisory Board Monthly Meeting",
                 description=self._parse_description(item),
                 classification=BOARD,
-                start=self._parse_start(item, start_time),
-                end=self._parse_end(item, end_time),
+                start=self._parse_start(date, start_time),
+                end=self._parse_end(date, end_time),
                 all_day=False,
                 time_notes="",
                 location=location,
@@ -51,25 +52,19 @@ class WicksSccabSpider(CityScrapersSpider):
         text = item.get().lower()
         return "CANCELLED" if "cancel" in text else ""
 
-    def _parse_date(self, item):
-        """Parse date with regex. Used in multiple functions."""
-        return re.search(r"\D+ \d+, \d+", item.css("::text").get()).group()
-
-    def _parse_start(self, item, start_time):
+    def _parse_start(self, date, start_time):
         """
         Parse start datetime as a naive datetime object.
         Combine date from page and hardcoded time.
         """
-        date = self._parse_date(item)
         parsed_datetime = parse(f"{date} {start_time}")
         return parsed_datetime
 
-    def _parse_end(self, item, end_time):
+    def _parse_end(self, date, end_time):
         """
         Parse end datetime as a naive datetime object.
         Combine date from page and hardcoded time.
         """
-        date = self._parse_date(item)
         parsed_datetime = parse(f"{date} {end_time}")
         return parsed_datetime
 
