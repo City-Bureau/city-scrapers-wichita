@@ -11,6 +11,8 @@ class WicksBoccSpider(CityScrapersSpider):
     agency = "Board of Sedgwick County Commissioners"
     timezone = "America/Chicago"
     # original https://www.sedgwickcounty.org/commissioners/commission-meetings/
+    # Original page embeds iframe with the following URL.
+    # We scrape the embedded URL instead.
     start_urls = ["https://sedgwick.granicus.com/ViewPublisher.php?view_id=34"]
     location = {
         "name": "Ruffin Auditorium",
@@ -48,7 +50,7 @@ class WicksBoccSpider(CityScrapersSpider):
                 continue
 
             meeting = Meeting(
-                title=self._parse_title(item),
+                title=item.css("td")[0].css("::text").get(),
                 description="",
                 classification=COMMISSION,
                 start=self._parse_start(item),
@@ -66,7 +68,10 @@ class WicksBoccSpider(CityScrapersSpider):
             yield meeting
 
     def _parse_start(self, item):
-        """Parse start datetime as a naive datetime object."""
+        """
+        Parse start date as a naive datetime object.
+        Fetch from correct table cell and clean up.
+        """
 
         # Attempt to get date
         try:
@@ -75,30 +80,9 @@ class WicksBoccSpider(CityScrapersSpider):
             clean_date = raw_date.strip().replace("\xa0", " ")
             parsed_date = parse(clean_date)
         except IndexError:
-            # Handle the case where the file doesn't exist
             parsed_date = None
 
-        # attempt to get time
-        # agenda_url = item.css('td')[2].css('a::attr(href)').get()
-        # Check if the agenda URL is found
-        # if agenda_url:
-        #     full_url = urljoin(response.url, agenda_url)
-        #     # Follow the agenda URL
-        #     response2 = scrapy.Request(full_url, callback=self._parse_agenda)
-        #     pdb.set_trace()
-        # else:
-        #     self.logger.info('Second URL not found on first page')
-
         return parsed_date
-
-    # def _parse_agenda(self, response):
-    #     # pdb.set_trace()
-    #     # Extract data from the second page
-    #     data = {
-    #         'title': response.css('h1::text').get(),
-    #         'content': response.css('div.content::text').get()
-    #     }
-    #     yield data
 
     def _parse_time_notes(self, item):
         """
@@ -111,16 +95,16 @@ class WicksBoccSpider(CityScrapersSpider):
         return "Check Agenda for start time." if agenda_url else ""
 
     def _parse_links(self, response, item):
-        """Parse or generate links."""
+        """Parse or generate links like Agenda or Video links."""
         output = []
 
         title = item.css("a::text").get()
 
-        # find URL based on content of link title
+        # find URL based on link title
         if title and "Agenda" in title:
             link_url = item.css("a::attr(href)").get()
             full_url = urljoin(response.url, link_url)
-            output.append({"title": title, "href": full_url})
+            output.append({"title": "Agenda", "href": full_url})
         elif title and "Video" in title:
             link_url = item.css("a::attr(onclick)").get().split("'")[1]
             full_url = urljoin(response.url, link_url)
