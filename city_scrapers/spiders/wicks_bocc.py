@@ -11,8 +11,8 @@ class WicksBoccSpider(CityScrapersSpider):
     agency = "Board of Sedgwick County Commissioners"
     timezone = "America/Chicago"
     # original https://www.sedgwickcounty.org/commissioners/commission-meetings/
-    # Original page embeds iframe with the following URL.
-    # We scrape the embedded URL instead.
+    # original page embeds iframe with the following URL
+    # we scrape the embedded URL instead
     start_urls = ["https://sedgwick.granicus.com/ViewPublisher.php?view_id=34"]
     location = {
         "name": "Ruffin Auditorium",
@@ -42,9 +42,8 @@ class WicksBoccSpider(CityScrapersSpider):
 
             yield meeting
 
-        # get archived events in current year
+        # get archived events in current year. ignore all other years
         for item in response.css(".TabbedPanelsContent")[0].css("table tbody tr"):
-            # pdb.set_trace()
             # skip if row does not have enough data cells to avoid IndexErrors
             if len(item.css("td")) < 2:
                 continue
@@ -73,7 +72,7 @@ class WicksBoccSpider(CityScrapersSpider):
         Fetch from correct table cell and clean up.
         """
 
-        # Attempt to get date
+        # attempt to get date
         try:
             date_cell = item.css("td")[1]
             raw_date = date_cell.css("::text").get()
