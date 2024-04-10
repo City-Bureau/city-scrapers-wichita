@@ -17,8 +17,6 @@ class WicksSccabSpider(CityScrapersSpider):
 
     def parse(self, response):
         """Parse meeting items from agency website."""
-        start_time = "8 a.m."
-        end_time = "9 a.m."
         location = {
             "name": "Adult Field Services",
             "address": "905 N. Main, Wichita, Kansas",
@@ -29,8 +27,8 @@ class WicksSccabSpider(CityScrapersSpider):
                 title="Community Corrections Advisory Board Monthly Meeting",
                 description=self._parse_description(item),
                 classification=BOARD,
-                start=self._parse_start(date, start_time),
-                end=self._parse_end(date, end_time),
+                start=parse(f"{date} 8 a.m."),
+                end=parse(f"{date} 9 a.m."),
                 all_day=False,
                 time_notes="",
                 location=location,
@@ -51,22 +49,6 @@ class WicksSccabSpider(CityScrapersSpider):
         """
         text = item.get().lower()
         return "CANCELLED" if "cancel" in text else ""
-
-    def _parse_start(self, date, start_time):
-        """
-        Parse start datetime as a naive datetime object.
-        Combine date from page and hardcoded time.
-        """
-        parsed_datetime = parse(f"{date} {start_time}")
-        return parsed_datetime
-
-    def _parse_end(self, date, end_time):
-        """
-        Parse end datetime as a naive datetime object.
-        Combine date from page and hardcoded time.
-        """
-        parsed_datetime = parse(f"{date} {end_time}")
-        return parsed_datetime
 
     def _parse_links(self, response, item):
         """
