@@ -46,7 +46,10 @@ def test_end():
 
 def test_time_notes():
     # only upcoming events get time notes
-    assert parsed_items[0]["time_notes"] == "Refer to agenda for start time or contact agency for details."
+    assert (
+        parsed_items[0]["time_notes"]
+        == "Refer to agenda for start time or contact agency for details."
+    )
     # archived events do not get time notes
     assert parsed_items[3]["time_notes"] == ""
 
@@ -95,14 +98,13 @@ def test_links():
             "href": "https://sedgwick.granicus.com/AgendaViewer.php?view_id=34&clip_id=5322",  # noqa
         },
         {
-            'title': 'Minutes',
-            'href': 'https://sedgwick.granicus.com/MinutesViewer.php?view_id=34&clip_id=5322&doc_id=dac37c29-e850-11ee-98bb-0050569183fa',  # noqa
+            "title": "Minutes",
+            "href": "https://sedgwick.granicus.com/MinutesViewer.php?view_id=34&clip_id=5322&doc_id=dac37c29-e850-11ee-98bb-0050569183fa",  # noqa
         },
         {
-            'title': 'Video',
-            'href': 'https://sedgwick.granicus.com/MediaPlayer.php?view_id=34&clip_id=5322',  # noqa
+            "title": "Video",
+            "href": "https://sedgwick.granicus.com/MediaPlayer.php?view_id=34&clip_id=5322",  # noqa
         },
-
     ]
 
 
