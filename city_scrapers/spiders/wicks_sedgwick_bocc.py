@@ -4,10 +4,9 @@ from city_scrapers_core.constants import COMMISSION
 from city_scrapers_core.items import Meeting
 from city_scrapers_core.spiders import CityScrapersSpider
 from dateutil.parser import parse
-import pdb
 
 
-class WicksBoccSpider(CityScrapersSpider):
+class WicksSedgwickBoccSpider(CityScrapersSpider):
     name = "wicks_bocc"
     agency = "Board of Sedgwick County Commissioners"
     timezone = "America/Chicago"

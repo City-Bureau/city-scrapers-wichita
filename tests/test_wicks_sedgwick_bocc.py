@@ -6,13 +6,13 @@ from city_scrapers_core.constants import COMMISSION, TENTATIVE
 from city_scrapers_core.utils import file_response
 from freezegun import freeze_time
 
-from city_scrapers.spiders.wicks_bocc import WicksBoccSpider
+from city_scrapers.spiders.wicks_sedgwick_bocc import WicksSedgwickBoccSpider
 
 test_response = file_response(
-    join(dirname(__file__), "files", "wicks_bocc.html"),
+    join(dirname(__file__), "files", "wicks_sedgwick_bocc.html"),
     url="https://sedgwick.granicus.com/ViewPublisher.php?view_id=34",
 )
-spider = WicksBoccSpider()
+spider = WicksSedgwickBoccSpider()
 
 freezer = freeze_time("2024-04-08")
 freezer.start()
