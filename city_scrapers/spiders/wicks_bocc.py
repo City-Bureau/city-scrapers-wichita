@@ -4,16 +4,21 @@ from city_scrapers_core.constants import COMMISSION
 from city_scrapers_core.items import Meeting
 from city_scrapers_core.spiders import CityScrapersSpider
 from dateutil.parser import parse
+import pdb
 
 
 class WicksBoccSpider(CityScrapersSpider):
     name = "wicks_bocc"
     agency = "Board of Sedgwick County Commissioners"
     timezone = "America/Chicago"
+    custom_settings = {
+        "ROBOTSTXT_OBEY": False,
+    }
     # original https://www.sedgwickcounty.org/commissioners/commission-meetings/
     # original page embeds iframe with the following URL
     # we scrape the embedded URL instead
     start_urls = ["https://sedgwick.granicus.com/ViewPublisher.php?view_id=34"]
+    time_notes = "Refer to agenda for start time or contact agency for details."
     location = {
         "name": "Ruffin Auditorium",
         "address": "100 N. Broadway, Lower Level, Wichita, KS 67202",
@@ -29,9 +34,9 @@ class WicksBoccSpider(CityScrapersSpider):
                 description="",
                 classification=COMMISSION,
                 start=self._parse_start(item),
-                end="",
+                end=None,
                 all_day=False,
-                time_notes=self._parse_time_notes(item),
+                time_notes=self.time_notes,
                 location=self.location,
                 links=self._parse_links(response, item),
                 source=response.url,
@@ -53,7 +58,7 @@ class WicksBoccSpider(CityScrapersSpider):
                 description="",
                 classification=COMMISSION,
                 start=self._parse_start(item),
-                end="",
+                end=None,
                 all_day=False,
                 time_notes="",
                 location=self.location,
@@ -83,30 +88,23 @@ class WicksBoccSpider(CityScrapersSpider):
 
         return parsed_date
 
-    def _parse_time_notes(self, item):
-        """
-        Parse any additional notes on the timing of the meeting.
-        If Agenda link is given, meeting start time may be found in there.
-        Eventually we could scrape the link
-        but for now we can just tell user to check link themselves.
-        """
-        agenda_url = item.css("td")[2].css("a::attr(href)").get()
-        return "Check Agenda for start time." if agenda_url else ""
-
     def _parse_links(self, response, item):
         """Parse or generate links like Agenda or Video links."""
         output = []
 
-        title = item.css("a::text").get()
+        # find all links in table row
+        links = item.css("a")
 
-        # find URL based on link title
-        if title and "Agenda" in title:
-            link_url = item.css("a::attr(href)").get()
-            full_url = urljoin(response.url, link_url)
-            output.append({"title": "Agenda", "href": full_url})
-        elif title and "Video" in title:
-            link_url = item.css("a::attr(onclick)").get().split("'")[1]
-            full_url = urljoin(response.url, link_url)
-            output.append({"title": "Video", "href": full_url})
+        for link in links:
+            title = link.css("::text").get()
+            # find URL based on link title
+            if title and "Video" in title:
+                link_url = link.css("::attr(onclick)").get().split("'")[1]
+                full_url = urljoin(response.url, link_url)
+                output.append({"title": "Video", "href": full_url})
+            else:
+                link_url = link.css("::attr(href)").get()
+                full_url = urljoin(response.url, link_url)
+                output.append({"title": title, "href": full_url})
 
         return output

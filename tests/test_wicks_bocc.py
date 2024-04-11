@@ -40,11 +40,14 @@ def test_start():
 
 
 def test_end():
-    assert parsed_items[0]["end"] == ""
+    assert parsed_items[0]["end"] == None
+    assert parsed_items[3]["end"] == None
 
 
 def test_time_notes():
-    assert parsed_items[0]["time_notes"] == "Check Agenda for start time."
+    # only upcoming events get time notes
+    assert parsed_items[0]["time_notes"] == "Refer to agenda for start time or contact agency for details."
+    # archived events do not get time notes
     assert parsed_items[3]["time_notes"] == ""
 
 
@@ -85,6 +88,21 @@ def test_links():
             "title": "Video",
             "href": "https://sedgwick.granicus.com/MediaPlayer.php?view_id=34&clip_id=5350",  # noqa
         }
+    ]
+    assert parsed_items[30]["links"] == [
+        {
+            "title": "Agenda",
+            "href": "https://sedgwick.granicus.com/AgendaViewer.php?view_id=34&clip_id=5322",  # noqa
+        },
+        {
+            'title': 'Minutes',
+            'href': 'https://sedgwick.granicus.com/MinutesViewer.php?view_id=34&clip_id=5322&doc_id=dac37c29-e850-11ee-98bb-0050569183fa',  # noqa
+        },
+        {
+            'title': 'Video',
+            'href': 'https://sedgwick.granicus.com/MediaPlayer.php?view_id=34&clip_id=5322',  # noqa
+        },
+
     ]
 
 
