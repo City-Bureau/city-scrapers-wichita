@@ -77,14 +77,10 @@ class WicksBoccSpider(CityScrapersSpider):
         Fetch from correct table cell and clean up.
         """
 
-        # attempt to get date
-        try:
-            date_cell = item.css("td")[1]
-            raw_date = date_cell.css("::text").get()
-            clean_date = raw_date.strip().replace("\xa0", " ")
-            parsed_date = parse(clean_date)
-        except IndexError:
-            parsed_date = None
+        date_cell = item.css("td")[1]
+        raw_date = date_cell.css("::text").get()
+        clean_date = raw_date.strip().replace("\xa0", " ")
+        parsed_date = parse(clean_date)
 
         return parsed_date
 
