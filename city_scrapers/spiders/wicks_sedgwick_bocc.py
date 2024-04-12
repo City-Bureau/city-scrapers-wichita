@@ -7,7 +7,7 @@ from dateutil.parser import parse
 
 
 class WicksSedgwickBoccSpider(CityScrapersSpider):
-    name = "wicks_bocc"
+    name = "wicks_sedgwick_bocc"
     agency = "Board of Sedgwick County Commissioners"
     timezone = "America/Chicago"
     custom_settings = {
