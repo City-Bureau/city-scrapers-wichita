@@ -25,6 +25,7 @@ freezer.start()
 # containing the start date and meeting id
 test_response_detail.meta["start_date"] = datetime(2024, 2, 19, 0, 0)
 test_response_detail.meta["meeting_id"] = "CT23380490B4"
+test_response_detail.meta["links"] = []
 parsed_items = [item for item in spider.parse(test_response)]
 parsed_item = next(spider._parse_detail(test_response_detail))
 freezer.stop()

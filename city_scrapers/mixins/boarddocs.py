@@ -2,11 +2,12 @@ import random
 import re
 from datetime import datetime
 
+from azure.storage.blob import ContainerClient
 from city_scrapers_core.constants import BOARD
 from city_scrapers_core.items import Meeting
 from city_scrapers_core.spiders import CityScrapersSpider
 from dateutil.relativedelta import relativedelta
-from scrapy import Request
+from scrapy import FormRequest, Request
 
 
 class BoardDocsMixinMeta(type):
@@ -43,8 +44,15 @@ class BoardDocsMixin(CityScrapersSpider, metaclass=BoardDocsMixinMeta):
         """
         Initiates a POST request to fetch the meetings list from BoardDocs API.
         Includes a random integer query parameter for cache-busting, mimicking
-        user behavior and aiming to prevent rate limiting.
+        user behavior and aiming to prevent rate limiting. If in prod mode,
+        also sets up the Azure client for uploading meeting materials.
         """
+        self.city_scrapers_env = self.settings.get("CITY_SCRAPERS_ENV")
+        if self.city_scrapers_env == "prod":
+            self.setup_azure_client()
+            self.log("Prod environment: agendas will be uploaded to Azure")
+        else:
+            self.log("Non-prod environment: no agendas will be uploaded to Azure")
         yield Request(
             f"{self.base_url}/{self.boarddocs_state}/{self.boarddocs_slug}/Board.nsf/BD-GetMeetingsList?open&0.{self.gen_random_int()}",  # noqa
             method="POST",
@@ -53,10 +61,24 @@ class BoardDocsMixin(CityScrapersSpider, metaclass=BoardDocsMixinMeta):
             callback=self.parse,
         )
 
-    def gen_random_int(self):
-        """Generates a random 15-digit number for cache-busting."""
-        random_15_digit_number = random.randint(10**14, (10**15) - 1)
-        return random_15_digit_number
+    def setup_azure_client(self):
+        """Sets up Azure ContainerClient for blob upload."""
+        azure_account_name = self.settings.get("AZURE_ACCOUNT_NAME")
+        azure_account_key = self.settings.get("AZURE_ACCOUNT_KEY")
+
+        for var_tuple in [
+            (azure_account_name, "AZURE_ACCOUNT_NAME"),
+            (azure_account_key, "AZURE_ACCOUNT_KEY"),
+        ]:
+            if not var_tuple[0]:
+                raise KeyError(f"Missing settings value {var_tuple[1]}")
+
+        account_url = f"{azure_account_name}.blob.core.windows.net"
+        self.container_client = ContainerClient(
+            account_url,
+            container_name="meetings-downloads",
+            credential=azure_account_key,
+        )
 
     def parse(self, response):
         """Parse the JSON list of meetings"""
@@ -65,18 +87,94 @@ class BoardDocsMixin(CityScrapersSpider, metaclass=BoardDocsMixinMeta):
         for item in filtered_meetings:
             meeting_id = item["unique"]
             start_date = item["start_date"]
-            detail_url = f"https://go.boarddocs.com/{self.boarddocs_state}/{self.boarddocs_slug}/Board.nsf/BD-GetMeeting?open&0.{self.gen_random_int()}"  # noqa
-            details_body = (
-                f"current_committee_id={self.boarddocs_committee_id}&id={meeting_id}"
-            )
-            yield Request(
-                detail_url,
+            # Make request to HTML page endpoint for agenda
+            random_int = self.gen_random_int()
+            agenda_url = f"https://go.boarddocs.com/{self.boarddocs_state}/{self.boarddocs_slug}/Board.nsf/Download-AgendaDetailed?open&{random_int}"  # noqa
+            # request agenda page - send with form data
+            formdata = {
+                "id": meeting_id,
+                "current_committee_id": self.boarddocs_committee_id,
+            }
+            yield FormRequest(
+                agenda_url,
                 method="POST",
-                callback=self._parse_detail,
-                meta={"start_date": start_date, "meeting_id": meeting_id},
-                body=details_body,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                formdata=formdata,
+                meta={"meeting_id": meeting_id, "start_date": start_date},
+                callback=self.upload_agenda,
             )
+
+    def upload_agenda(self, response):
+        """Meeting materials can only be accessed using a POST request so
+        we aren't able to provide a list of links in the traditional way.
+        Instead, we first upload meeting materials to a city-scraper Azure
+        container and then returns a list of links to those materials"""
+        meeting_id = response.meta["meeting_id"]
+        start_date = response.meta["start_date"]
+
+        # If in prod mode, upload to Azure, otherwise skip
+        links = []
+        if self.city_scrapers_env == "prod" and not response.body:
+            self.log("No content found at agenda endpoint")
+        elif self.city_scrapers_env == "prod":
+            filename = f"{self.boarddocs_state}-{self.boarddocs_slug}-{meeting_id}.html"
+            blob_client = self.container_client.upload_blob(
+                name=filename, data=response.body, overwrite=True
+            )
+            self.log(
+                f"Uploaded agenda to city-scraper Azure storage: {blob_client.url}"
+            )
+            links.append(
+                {"href": blob_client.url, "title": f"Meeting Agenda ({start_date})"}
+            )
+
+        # parse actual meeting
+        detail_url = f"https://go.boarddocs.com/{self.boarddocs_state}/{self.boarddocs_slug}/Board.nsf/BD-GetMeeting?open&0.{self.gen_random_int()}"  # noqa
+        details_body = (
+            f"current_committee_id={self.boarddocs_committee_id}&id={meeting_id}"
+        )
+        yield Request(
+            detail_url,
+            method="POST",
+            callback=self._parse_detail,
+            meta={
+                "start_date": start_date,
+                "meeting_id": meeting_id,
+                "links": links,
+            },
+            body=details_body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+    def _parse_detail(self, response):
+        """Parse the HTML detail response for each meeting"""
+        start_date = response.meta["start_date"]
+        meeting_id = response.meta["meeting_id"]
+        links = response.meta["links"]
+        if re.search("no access", response.text, re.IGNORECASE):
+            # For unknown reasons, some URLs return some HTML that includes a
+            # "No access" message. This might be because the meeting is not
+            # public or information is not yet available.
+            self.logger.warning(
+                f'"No access" found in the HTML of meeting {meeting_id} ({start_date})'
+            )
+            self.logger.warning("Aborting parse of this meeting.")
+            return
+        title = self._parse_title(response)
+        meeting = Meeting(
+            title=title,
+            description=self._parse_description(response),
+            classification=self._parse_classification(title),
+            start=self._parse_start(response, start_date),
+            end=None,
+            all_day=False,
+            time_notes="",
+            location=self._parse_location(response),
+            links=links,
+            source=self._parse_source(),
+        )
+        meeting["status"] = self._get_status(meeting)
+        meeting["id"] = self._get_id(meeting)
+        yield meeting
 
     def _get_clean_meetings(self, data):
         """
@@ -98,35 +196,10 @@ class BoardDocsMixin(CityScrapersSpider, metaclass=BoardDocsMixinMeta):
                 filtered_data.append(item)
         return filtered_data
 
-    def _parse_detail(self, response):
-        """Parse the HTML detail response for each meeting"""
-        start_date = response.meta["start_date"]
-        meeting_id = response.meta["meeting_id"]
-        if re.search("no access", response.text, re.IGNORECASE):
-            # For unknown reasons, some URLs return some HTML that includes a
-            # "No access" message. This might be because the meeting is not
-            # public or information is not yet available.
-            self.logger.warning(
-                f'"No access" found in the HTML of meeting {meeting_id} ({start_date})'
-            )
-            self.logger.warning("Aborting parse of this meeting.")
-            return
-        title = self._parse_title(response)
-        meeting = Meeting(
-            title=title,
-            description=self._parse_description(response),
-            classification=self._parse_classification(title),
-            start=self._parse_start(response, start_date),
-            end=None,
-            all_day=False,
-            time_notes="",
-            location=self._parse_location(response),
-            links=self._parse_links(response),
-            source=self._parse_source(),
-        )
-        meeting["status"] = self._get_status(meeting)
-        meeting["id"] = self._get_id(meeting)
-        yield meeting
+    def gen_random_int(self):
+        """Generates a random 15-digit number for cache-busting."""
+        random_15_digit_number = random.randint(10**14, (10**15) - 1)
+        return random_15_digit_number
 
     def _parse_title(self, response):
         return response.css(".meeting-name::text").get().strip()
@@ -177,12 +250,6 @@ class BoardDocsMixin(CityScrapersSpider, metaclass=BoardDocsMixinMeta):
         If location is available, the child class should override this
         method or set a standing location as a class var"""
         return self.location
-
-    def _parse_links(self, response):
-        """Links are generally not available from the BoardDocs API.
-        If links are available, the child class should override this
-        method or set a links as a class var"""
-        return self.links
 
     def _parse_source(self):
         """We can't use the source from the detail page because it's a POST
