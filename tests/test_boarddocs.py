@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
+from scrapy import Selector
 from scrapy.settings import Settings
 
 from city_scrapers.mixins.boarddocs import BoardDocsMixin
@@ -26,6 +27,7 @@ class TestBoardDocsMixin:
         # Test that the Azure client is setup when the required settings are set
         boarddocs_spider.settings.set("AZURE_ACCOUNT_NAME", "testaccount")
         boarddocs_spider.settings.set("AZURE_ACCOUNT_KEY", "testkey")
+        boarddocs_spider.settings.set("AZURE_CONTAINER", "testcontainer")
         boarddocs_spider.setup_azure_client()
         assert boarddocs_spider.container_client is not None
 
@@ -33,6 +35,7 @@ class TestBoardDocsMixin:
         # Test that an error is raised if the required settings are not set
         boarddocs_spider.settings.set("AZURE_ACCOUNT_NAME", "testaccount")
         boarddocs_spider.settings.set("AZURE_ACCOUNT_KEY", None)
+        boarddocs_spider.settings.set("AZURE_CONTAINER", "testcontainer")
         with pytest.raises(KeyError):
             boarddocs_spider.setup_azure_client()
 
@@ -119,3 +122,24 @@ class TestBoardDocsMixin:
         assert (
             result[0]["unique"] == "future_meeting"
         ), "The unique identifier of the future meeting does not match."
+
+    def test_convert_relative_urls(self, boarddocs_spider):
+        # Testing that relative URLs are converted to absolute URLs
+        html_content = """
+        <h1>some content</h1>
+        <a href="/relative-url">Some relative URL</a>
+        <p>Some more content</p>
+        <a href="http://absolute-url.com">Some absolute URL</a>
+        <img src="/relative-image.jpg" />
+        """
+        new_html_content = boarddocs_spider._convert_relative_urls(html_content)
+        sel = Selector(text=new_html_content)
+        # First a tag's URL relative url should be absolute
+        assert sel.css("a::attr(href)").get() == "https://go.boarddocs.com/relative-url"
+        # Second a tag's URL should not be modified
+        assert sel.css("a::attr(href)").getall()[1] == "http://absolute-url.com"
+        # img tag's src should be absolute
+        assert (
+            sel.css("img::attr(src)").get()
+            == "https://go.boarddocs.com/relative-image.jpg"
+        )

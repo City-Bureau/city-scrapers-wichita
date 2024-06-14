@@ -1,13 +1,14 @@
 import random
 import re
 from datetime import datetime
+from urllib.parse import urljoin
 
-from azure.storage.blob import ContainerClient
+from azure.storage.blob import ContainerClient, ContentSettings
 from city_scrapers_core.constants import BOARD
 from city_scrapers_core.items import Meeting
 from city_scrapers_core.spiders import CityScrapersSpider
 from dateutil.relativedelta import relativedelta
-from scrapy import FormRequest, Request
+from scrapy import FormRequest, Request, Selector
 
 
 class BoardDocsMixinMeta(type):
@@ -65,10 +66,12 @@ class BoardDocsMixin(CityScrapersSpider, metaclass=BoardDocsMixinMeta):
         """Sets up Azure ContainerClient for blob upload."""
         azure_account_name = self.settings.get("AZURE_ACCOUNT_NAME")
         azure_account_key = self.settings.get("AZURE_ACCOUNT_KEY")
+        azure_container = self.settings.get("AZURE_CONTAINER")
 
         for var_tuple in [
             (azure_account_name, "AZURE_ACCOUNT_NAME"),
             (azure_account_key, "AZURE_ACCOUNT_KEY"),
+            (azure_container, "AZURE_CONTAINER"),
         ]:
             if not var_tuple[0]:
                 raise KeyError(f"Missing settings value {var_tuple[1]}")
@@ -76,7 +79,7 @@ class BoardDocsMixin(CityScrapersSpider, metaclass=BoardDocsMixinMeta):
         account_url = f"{azure_account_name}.blob.core.windows.net"
         self.container_client = ContainerClient(
             account_url,
-            container_name="meetings-downloads",
+            container_name=azure_container,
             credential=azure_account_key,
         )
 
@@ -116,9 +119,15 @@ class BoardDocsMixin(CityScrapersSpider, metaclass=BoardDocsMixinMeta):
         if self.city_scrapers_env == "prod" and not response.body:
             self.log("No content found at agenda endpoint")
         elif self.city_scrapers_env == "prod":
-            filename = f"{self.boarddocs_state}-{self.boarddocs_slug}-{meeting_id}.html"
+            directory = "meetings-downloads"
+            filename = f"{directory}/{self.boarddocs_state}-{self.boarddocs_slug}-{meeting_id}.html"  # noqa
+            content_settings = ContentSettings(content_type="text/html")
+            clean_content = self._convert_relative_urls(response.text)
             blob_client = self.container_client.upload_blob(
-                name=filename, data=response.body, overwrite=True
+                name=filename,
+                data=clean_content,
+                content_settings=content_settings,
+                overwrite=True,
             )
             self.log(
                 f"Uploaded agenda to city-scraper Azure storage: {blob_client.url}"
@@ -144,6 +153,33 @@ class BoardDocsMixin(CityScrapersSpider, metaclass=BoardDocsMixinMeta):
             body=details_body,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
+
+    def _convert_relative_urls(self, html_string):
+        """Converts all relative URLs to absolute URLs in href and src attributes
+        in HTML text.
+
+        Args:
+        html_string (str): The HTML content as a string.
+        base_url (str): The base URL to resolve relative URLs against.
+
+        Returns:
+        str: The modified HTML string with absolute URLs.
+        """
+        sel = Selector(text=html_string)
+
+        # Iterate over all elements that have 'href' attributes
+        for link in sel.xpath("//*[@href]"):
+            relative_url = link.xpath("@href").get()
+            absolute_url = urljoin(self.base_url, relative_url)
+            link.root.set("href", absolute_url)
+
+        # Iterate over all elements that have 'src' attributes
+        for src in sel.xpath("//*[@src]"):
+            relative_url = src.xpath("@src").get()
+            absolute_url = urljoin(self.base_url, relative_url)
+            src.root.set("src", absolute_url)
+
+        return sel.get()
 
     def _parse_detail(self, response):
         """Parse the HTML detail response for each meeting"""
