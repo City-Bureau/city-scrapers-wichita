@@ -28,11 +28,14 @@ class WicksSedgwickBoccSpider(CityScrapersSpider):
 
         # get upcoming events
         for item in response.css("table")[0].css("tbody tr"):
+            start = self._parse_start(item)
+            if not start:
+                continue
             meeting = Meeting(
                 title=item.css("td")[0].css("::text").get(),
                 description="",
                 classification=COMMISSION,
-                start=self._parse_start(item),
+                start=start,
                 end=None,
                 all_day=False,
                 time_notes=self.time_notes,
@@ -51,12 +54,14 @@ class WicksSedgwickBoccSpider(CityScrapersSpider):
             # skip if row does not have enough data cells to avoid IndexErrors
             if len(item.css("td")) < 2:
                 continue
-
+            start = self._parse_start(item)
+            if not start:
+                continue
             meeting = Meeting(
                 title=item.css("td")[0].css("::text").get(),
                 description="",
                 classification=COMMISSION,
-                start=self._parse_start(item),
+                start=start,
                 end=None,
                 all_day=False,
                 time_notes="",
@@ -79,6 +84,8 @@ class WicksSedgwickBoccSpider(CityScrapersSpider):
         date_cell = item.css("td")[1]
         raw_date = date_cell.css("::text").get()
         clean_date = raw_date.strip().replace("\xa0", " ")
+        if not clean_date:
+            return None
         parsed_date = parse(clean_date)
 
         return parsed_date
